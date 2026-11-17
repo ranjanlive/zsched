@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>zsched — Local Agent Task Scheduler & Supervisor in Go</title>
+  <meta name="description" content="A local, lightweight agent task scheduler and process supervisor with Windows tray, embedded web dashboard, and OpenAI-compatible assistant. Zero external dependencies.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg-primary: #0a0c10;
+      --bg-secondary: #11141b;
+      --bg-card: rgba(20, 24, 33, 0.7);
+      --border-color: rgba(255, 255, 255, 0.08);
+      --border-hover: rgba(16, 185, 129, 0.3);
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --accent: #10b981;
+      --accent-hover: #059669;
+      --accent-glow: rgba(16, 185, 129, 0.2);
+      --cyan: #38bdf8;
+      --purple: #a855f7;
+      --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-primary);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.6;
+      overflow-x: hidden;
+      min-height: 100vh;
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(16, 185, 129, 0.08) 0%, transparent 60%),
+        radial-gradient(circle at 100% 40%, rgba(56, 189, 248, 0.05) 0%, transparent 40%),
+        linear-gradient(to bottom, transparent, rgba(10, 12, 16, 0.8));
+    }
+
+    .container { max-width: 1140px; margin: 0 auto; padding: 0 24px; }
+
+    header {
+      padding: 24px 0;
+      border-bottom: 1px solid var(--border-color);
+      backdrop-filter: blur(12px);
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      background: rgba(10, 12, 16, 0.85);
+    }
+
+    .nav-wrapper { display: flex; justify-content: space-between; align-items: center; }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: var(--text-main);
+      font-weight: 800;
+      font-size: 1.25rem;
+      letter-spacing: -0.02em;
+    }
+
+    .brand-badge {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 600;
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--accent);
+      padding: 3px 8px;
+      border-radius: 6px;
+      border: 1px solid rgba(16, 185, 129, 0.2);
+    }
+
+    .nav-links { display: flex; align-items: center; gap: 20px; }
+    .nav-link { color: var(--text-muted); text-decoration: none; font-size: 0.9rem; font-weight: 500; transition: color 0.2s; }
+    .nav-link:hover { color: var(--text-main); }
+
+    .btn-github {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-secondary);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn-github:hover {
+      border-color: var(--accent);
+      background: rgba(16, 185, 129, 0.05);
+      transform: translateY(-1px);
+    }
+
+    /* Hero */
+    .hero { padding: 80px 0 60px; text-align: center; }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--accent);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      margin-bottom: 28px;
+    }
+
+    .pill-pulse {
+      width: 8px;
+      height: 8px;
+      background: var(--accent);
+      border-radius: 50%;
+      box-shadow: 0 0 10px var(--accent);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.9); }
+      100% { opacity: 1; transform: scale(1); }
+    }
+
+    .hero-title {
+      font-size: 3.5rem;
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1.1;
+      margin-bottom: 20px;
+      background: linear-gradient(135deg, #ffffff 40%, #94a3b8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-tagline {
+      font-size: 1.25rem;
+      color: var(--text-muted);
+      max-width: 720px;
+      margin: 0 auto 36px;
+      font-weight: 400;
+    }
+
+    /* Live Stats */
+    .stats-bar {
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-bottom: 40px;
+      flex-wrap: wrap;
+    }
+
+    .stat-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      padding: 6px 14px;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      font-family: var(--font-mono);
+      color: var(--text-muted);
+    }
+    .stat-value { color: var(--text-main); font-weight: 700; }
+
+    /* CTA */
+    .cta-group {
+      display: flex;
+      justify-content: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 60px;
+    }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--accent);
+      color: #041018;
+      padding: 14px 28px;
+      border-radius: 10px;
+      font-weight: 700;
+      font-size: 1rem;
+      text-decoration: none;
+      box-shadow: 0 4px 20px var(--accent-glow);
+      transition: all 0.2s ease;
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(16, 185, 129, 0.35);
+    }
+
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--bg-secondary);
+      color: var(--text-main);
+      border: 1px solid var(--border-color);
+      padding: 14px 28px;
+      border-radius: 10px;
+      font-weight: 600;
+      font-size: 1rem;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover {
+      border-color: var(--border-hover);
+      background: rgba(255, 255, 255, 0.04);
+    }
+
+    /* System Tray & Terminal Preview */
+    .preview-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+      gap: 24px;
+      margin-bottom: 80px;
+      text-align: left;
+    }
+
+    .terminal-wrapper {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      overflow: hidden;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+    }
+
+    .terminal-header {
+      background: #181d26;
+      padding: 12px 18px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    .dot { width: 12px; height: 12px; border-radius: 50%; }
+    .dot-red { background: #ef4444; }
+    .dot-yellow { background: #f59e0b; }
+    .dot-green { background: #10b981; }
+
+    .terminal-title {
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-left: 12px;
+    }
+
+    .terminal-body {
+      padding: 24px;
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      line-height: 1.7;
+      color: #e2e8f0;
+      background: #0d1117;
+      overflow-x: auto;
+    }
+
+    .cmd-line { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+    .cmd-prompt { color: var(--accent); font-weight: 700; }
+    .cmd-text { color: #f8fafc; font-weight: 600; }
+    .cmd-comment { color: #64748b; }
+    .cmd-success { color: var(--accent); }
+
+    /* Features */
+    .section-title { font-size: 2rem; font-weight: 800; letter-spacing: -0.03em; margin-bottom: 12px; text-align: center; }
+    .section-subtitle { color: var(--text-muted); text-align: center; margin-bottom: 36px; font-size: 1.05rem; }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 24px;
+      margin-bottom: 80px;
+    }
+
+    .feature-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 30px;
+      transition: all 0.2s;
+    }
+    .feature-card:hover { border-color: var(--border-hover); transform: translateY(-2px); }
+
+    .feature-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: 10px;
+      background: rgba(16, 185, 129, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 20px;
+      color: var(--accent);
+    }
+    .feature-title { font-size: 1.2rem; font-weight: 700; margin-bottom: 10px; }
+    .feature-desc { color: var(--text-muted); font-size: 0.95rem; line-height: 1.6; }
+
+    /* Downloads Table */
+    .downloads-section {
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 16px;
+      padding: 40px;
+      margin-bottom: 80px;
+    }
+
+    .downloads-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .release-tag {
+      font-family: var(--font-mono);
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--accent);
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      font-weight: 600;
+    }
+
+    .downloads-table { width: 100%; border-collapse: collapse; text-align: left; }
+    .downloads-table th, .downloads-table td { padding: 14px 16px; border-bottom: 1px solid var(--border-color); }
+    .downloads-table th {
+      color: var(--text-muted);
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      font-family: var(--font-mono);
+    }
+    .file-name { font-family: var(--font-mono); font-weight: 600; color: var(--text-main); display: flex; align-items: center; gap: 8px; }
+    .badge-os { font-size: 0.7rem; padding: 2px 6px; border-radius: 4px; background: rgba(255, 255, 255, 0.08); color: var(--text-muted); font-family: var(--font-mono); }
+    
+    .btn-download-sm {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(16, 185, 129, 0.1);
+      color: var(--accent);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn-download-sm:hover { background: var(--accent); color: #041018; }
+
+    footer {
+      border-top: 1px solid var(--border-color);
+      padding: 40px 0;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+      text-align: center;
+    }
+    .footer-links { display: flex; justify-content: center; gap: 24px; margin-bottom: 16px; flex-wrap: wrap; }
+    .footer-links a { color: var(--text-muted); text-decoration: none; transition: color 0.2s; }
+    .footer-links a:hover { color: var(--text-main); }
+    .sync-status { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 0.75rem; color: var(--accent); margin-top: 8px; }
+
+    @media (max-width: 768px) {
+      .hero-title { font-size: 2.4rem; }
+      .downloads-section { padding: 24px 16px; }
+      .downloads-table th:nth-child(3), .downloads-table td:nth-child(3) { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="container nav-wrapper">
+      <a href="https://github.com/ranjanlive/zsched" class="brand">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        zsched
+        <span class="brand-badge" id="nav-version">v0.1.0</span>
+      </a>
+      <div class="nav-links">
+        <a href="#features" class="nav-link">Features</a>
+        <a href="#downloads" class="nav-link">Downloads</a>
+        <a href="https://github.com/ranjanlive/zagent" target="_blank" rel="noopener" class="nav-link">zagent</a>
+        <a href="https://github.com/ranjanlive/zsched" target="_blank" rel="noopener" class="btn-github">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+          GitHub
+        </a>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div class="pill">
+        <span class="pill-pulse"></span>
+        <span id="pill-release-text">Live Release: v0.1.0 on GitHub</span>
+      </div>
+      <h1 class="hero-title">Local Agent Scheduler<br>&amp; Process Supervisor in Go</h1>
+      <p class="hero-tagline">
+        Native Windows system tray, embedded web dashboard, Job Object process containment, and OpenAI-compatible assistant. Zero external dependencies.
+      </p>
+
+      <!-- Live Stats -->
+      <div class="stats-bar">
+        <div class="stat-pill">
+          <span>Stars:</span>
+          <span class="stat-value" id="stat-stars">0</span>
+        </div>
+        <div class="stat-pill">
+          <span>Release:</span>
+          <span class="stat-value" id="stat-version">v0.1.0</span>
+        </div>
+        <div class="stat-pill">
+          <span>Latest Commit:</span>
+          <span class="stat-value" id="stat-commit">...</span>
+        </div>
+        <div class="stat-pill">
+          <span>License:</span>
+          <span class="stat-value">Apache-2.0</span>
+        </div>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="cta-group">
+        <a id="btn-smart-download" href="https://github.com/ranjanlive/zsched/releases/latest" class="btn-primary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span id="smart-download-text">Download for Windows</span>
+        </a>
+        <a href="https://github.com/ranjanlive/zsched" target="_blank" rel="noopener" class="btn-secondary">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          View Documentation
+        </a>
+      </div>
+
+      <!-- Dual Preview -->
+      <div class="preview-grid">
+        <!-- Terminal 1 -->
+        <div class="terminal-wrapper">
+          <div class="terminal-header">
+            <div class="dot dot-red"></div>
+            <div class="dot dot-yellow"></div>
+            <div class="dot dot-green"></div>
+            <span class="terminal-title">zsched — terminal supervisor</span>
+          </div>
+          <div class="terminal-body">
+            <div class="cmd-line">
+              <span class="cmd-prompt">&gt;</span>
+              <span class="cmd-text">zsched schedules add --name "Audit" --random 2h:4h --task "Verify backups"</span>
+            </div>
+            <div class="cmd-comment"># Added schedule s-82f91a (next run: today at 19:42, persisted)</div>
+            <div class="cmd-line">
+              <span class="cmd-prompt">&gt;</span>
+              <span class="cmd-text">zsched runs list</span>
+            </div>
+            <div class="cmd-line">
+              <span class="cmd-success">r-49a02c</span>
+              <span>Audit · ResearchAgent · SUCCESS · 42s</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Terminal 2 -->
+        <div class="terminal-wrapper">
+          <div class="terminal-header">
+            <div class="dot dot-red"></div>
+            <div class="dot dot-yellow"></div>
+            <div class="dot dot-green"></div>
+            <span class="terminal-title">zsched — natural language assistant</span>
+          </div>
+          <div class="terminal-body">
+            <div class="cmd-line">
+              <span class="cmd-prompt">&gt;</span>
+              <span class="cmd-text">zsched ask "Pause all tasks until tomorrow morning"</span>
+            </div>
+            <div class="cmd-comment"># Calling tool: pause_dispatch()</div>
+            <div class="cmd-comment"># Global dispatch paused. Active workers will finish gracefully.</div>
+            <div class="cmd-line">
+              <span class="cmd-success">✔ All automatic task dispatch paused.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Features Grid -->
+  <section id="features" class="container">
+    <h2 class="section-title">Built for Unattended Reliability</h2>
+    <p class="section-subtitle">A robust OS-level supervisor for autonomous agents</p>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <h3 class="feature-title">Native Windows System Tray</h3>
+        <p class="feature-desc">Windowless background launcher (`zsched-tray.exe`) with tray menu controls, desktop notifications, and optional user login startup without admin rights.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        </div>
+        <h3 class="feature-title">Windows Job Object Isolation</h3>
+        <p class="feature-desc">Workers are placed into Job Objects with `KILL_ON_JOB_CLOSE`. Canceling a task or stopping the daemon guarantees zero orphaned background processes.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        </div>
+        <h3 class="feature-title">Non-Drifting Random Windows</h3>
+        <p class="feature-desc">Sampled random times (e.g. `20h:30h`) are saved into durable state and survive daemon restarts, preventing random schedule drift on reboots.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+        </div>
+        <h3 class="feature-title">Zero-Dependency Web Dashboard</h3>
+        <p class="feature-desc">Responsive web dashboard served directly from memory over authenticated loopback (`127.0.0.1`). Real-time run logs, countdowns, and controls.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 2a10 10 0 0 1 10 10h-10V2z"/></svg>
+        </div>
+        <h3 class="feature-title">AI Scheduling Assistant</h3>
+        <p class="feature-desc">Connect any OpenAI-compatible model (Ollama, vLLM, OpenAI) to natural-language schedule management, status queries, and log inspections via tool calls.</p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+        <h3 class="feature-title">Side-Effect Free Recovery</h3>
+        <p class="feature-desc">Power losses mark active tasks `interrupted` rather than blindly duplicating runs, preventing catastrophic side effects in external tools or codebases.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Live Downloads Table -->
+  <section id="downloads" class="container">
+    <div class="downloads-section">
+      <div class="downloads-header">
+        <div>
+          <h2 style="font-size:1.6rem; font-weight:800; margin-bottom:4px;">Official Release Binaries</h2>
+          <p style="color:var(--text-muted); font-size:0.9rem;" id="release-meta-text">Fetching latest assets from GitHub API...</p>
+        </div>
+        <div style="text-align:right;">
+          <span class="release-tag" id="table-version-tag">v0.1.0 Latest</span>
+          <div class="sync-status">
+            <span class="pill-pulse" style="width:6px; height:6px;"></span>
+            <span id="sync-label">Synced with GitHub</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="overflow-x:auto;">
+        <table class="downloads-table">
+          <thead>
+            <tr>
+              <th>File / Package</th>
+              <th>Platform / Architecture</th>
+              <th>Size</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="assets-table-body">
+            <tr>
+              <td colspan="4" style="text-align:center; color:var(--text-muted); padding:30px;">Loading release assets from GitHub...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="container">
+      <div class="footer-links">
+        <a href="https://github.com/ranjanlive/zsched" target="_blank" rel="noopener">GitHub Repository</a>
+        <a href="https://github.com/ranjanlive/zsched/releases" target="_blank" rel="noopener">Releases</a>
+        <a href="https://github.com/ranjanlive/zsched/issues" target="_blank" rel="noopener">Issues</a>
+        <a href="https://github.com/ranjanlive/zagent" target="_blank" rel="noopener">zagent Project</a>
+        <a href="https://github.com/ranjanlive/zsched/blob/main/LICENSE" target="_blank" rel="noopener">Apache-2.0 License</a>
+      </div>
+      <p style="font-size:0.85rem; color:#64748b;">Created by <a href="https://github.com/ranjanlive" style="color:var(--accent); text-decoration:none;">Rajeev Ranjan (@ranjanlive)</a> · Built with Go 1.26+</p>
+    </div>
+  </footer>
+
+  <script>
+    const GITHUB_REPO = 'ranjanlive/zsched';
+    const FALLBACK_VERSION = 'v0.1.0';
+
+    function formatBytes(bytes) {
+      if (bytes === 0) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    function getPlatformMeta(name) {
+      if (name.includes('zsched-tray.exe')) return { label: 'Windows x64 (Silent Tray GUI)', icon: '🪟' };
+      if (name.includes('zsched.exe')) return { label: 'Windows x64 (Console Executable)', icon: '🪟' };
+      if (name.includes('windows-amd64')) return { label: 'Windows x64 Bundle (Tray + CLI)', icon: '🪟' };
+      if (name.includes('windows-arm64')) return { label: 'Windows ARM64', icon: '🪟' };
+      if (name.includes('linux-amd64')) return { label: 'Linux x86_64', icon: '🐧' };
+      if (name.includes('linux-arm64')) return { label: 'Linux ARM64', icon: '🐧' };
+      if (name.includes('darwin-arm64')) return { label: 'macOS Apple Silicon', icon: '🍎' };
+      if (name.includes('darwin-amd64')) return { label: 'macOS Intel', icon: '🍎' };
+      if (name.includes('source')) return { label: 'Source Code', icon: '📦' };
+      if (name.includes('SHA256')) return { label: 'Checksums', icon: '🔒' };
+      return { label: 'Universal', icon: '📁' };
+    }
+
+    function setupSmartDownload(assets) {
+      const userAgent = window.navigator.userAgent.toLowerCase();
+      let targetPattern = 'windows-amd64.zip';
+      let osName = 'Windows (x64)';
+
+      if (userAgent.indexOf('mac') !== -1) {
+        targetPattern = 'darwin-arm64.tar.gz';
+        osName = 'macOS (Apple Silicon)';
+      } else if (userAgent.indexOf('linux') !== -1) {
+        targetPattern = 'linux-amd64.tar.gz';
+        osName = 'Linux (x86_64)';
+      }
+
+      const match = assets.find(a => a.name.includes(targetPattern));
+      const btn = document.getElementById('btn-smart-download');
+      const label = document.getElementById('smart-download-text');
+
+      if (match) {
+        btn.href = match.browser_download_url;
+        label.innerText = `Download for ${osName}`;
+      }
+    }
+
+    async function fetchGitHubData() {
+      try {
+        const repoRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}`);
+        if (repoRes.ok) {
+          const repoData = await repoRes.json();
+          document.getElementById('stat-stars').innerText = repoData.stargazers_count || 0;
+        }
+
+        const commitRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/commits/main`);
+        if (commitRes.ok) {
+          const commitData = await commitRes.json();
+          document.getElementById('stat-commit').innerText = commitData.sha.substring(0, 7);
+        }
+
+        const releaseRes = await fetch(`https://api.github.com/repos/${GITHUB_REPO}/releases/latest`);
+        if (releaseRes.ok) {
+          const releaseData = await releaseRes.json();
+          const tagName = releaseData.tag_name || FALLBACK_VERSION;
+          
+          document.getElementById('nav-version').innerText = tagName;
+          document.getElementById('stat-version').innerText = tagName;
+          document.getElementById('table-version-tag').innerText = `${tagName} Latest`;
+          document.getElementById('pill-release-text').innerText = `Live Release: ${tagName} on GitHub`;
+          
+          const pubDate = new Date(releaseData.published_at).toLocaleDateString('en-US', {
+            year: 'numeric', month: 'short', day: 'numeric'
+          });
+          document.getElementById('release-meta-text').innerText = `Published ${pubDate} · ${releaseData.assets.length} binary distributions`;
+
+          const tbody = document.getElementById('assets-table-body');
+          tbody.innerHTML = '';
+
+          releaseData.assets.forEach(asset => {
+            const meta = getPlatformMeta(asset.name);
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+              <td>
+                <span class="file-name">
+                  <span>${meta.icon}</span>
+                  <span>${asset.name}</span>
+                </span>
+              </td>
+              <td><span class="badge-os">${meta.label}</span></td>
+              <td style="font-family:var(--font-mono); color:var(--text-muted); font-size:0.85rem;">${formatBytes(asset.size)}</td>
+              <td>
+                <a href="${asset.browser_download_url}" class="btn-download-sm">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  Download
+                </a>
+              </td>
+            `;
+            tbody.appendChild(tr);
+          });
+
+          setupSmartDownload(releaseData.assets);
+        }
+      } catch (err) {
+        console.warn('GitHub API fetch fallback', err);
+        document.getElementById('sync-label').innerText = 'Cached v0.1.0 Mode';
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', fetchGitHubData);
+  </script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+# build output
+/dist/
+/bin/
+*.exe
+
+# local runtime state and secrets
+/data/
+/qa-data/
+*.log
+daemon.lock
+daemon.json
+assistant.key
+assistant-history.json
+state.json
+runs/
+
+# editor
+.vscode/
+.idea/
